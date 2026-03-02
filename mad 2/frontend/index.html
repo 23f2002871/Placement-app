@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus Placement System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/vue-router@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body class="bg-light">
+    {% raw %}
+    <div id="app">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">Placement Portal Application</a>
+                <div class="d-flex">
+                    <button v-if="userIsLoggedIn" @click="handleLogout" class="btn btn-outline-light">Logout</button>
+                    <router-link v-if="!userIsLoggedIn && $route.path !== '/register'" to="/register" class="btn btn-outline-light ms-2">Register</router-link>
+                    <router-link v-if="!userIsLoggedIn && $route.path === '/register'" to="/" class="btn btn-outline-light ms-2">Login</router-link>
+                </div>
+            </div>
+        </nav>
+        <div class="container pb-5">
+            <router-view></router-view>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        const { createRouter, createWebHashHistory } = VueRouter;
+
+        // ---- COMPONENTS ----
+
+        const LoginPage = { 
+            template: `
+                <div class="row justify-content-center">
+                    <div class="col-md-5">
+                        <div class="card shadow mt-4">
+                            <div class="card-body">
+                                <h3 class="card-title text-center mb-4">User Login</h3>
+                                <form @submit.prevent="submitLogin">
+                                    <div class="mb-3">
+                                        <label>Username</label>
+                                        <input v-model="loginData.username" type="text" class="form-control" required>
+                                    </div>
+                                    <div class="mb-4">
+                                        <label>Password</label>
+                                        <input v-model="loginData.password" type="password" class="form-control" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100">Login to Dashboard</button>
+                                </form>
+                                <div class="mt-3 text-center small text-muted">
+                                    <p>Don't have an account? <router-link to="/register">Register here</router-link></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`,
+            data() { 
+                return { loginData: { username: '', password: '' } } 
+            },
+            methods: {
+                async submitLogin() {
+                    try {
+                        const response = await axios.post('/api/auth/login', this.loginData);
+                        console.log("Login successful");
+                        localStorage.setItem('userToken', response.data.access_token);
+                        localStorage.setItem('userRole', response.data.role);
+                        this.$root.userIsLoggedIn = true;
+                        
+                        // redirect based on what kind of user logged in
+                        if (response.data.role === 'admin') {
+                            this.$router.push('/admin');
+                        } else if (response.data.role === 'student') {
+                            this.$router.push('/student');
+                        } else {
+                            this.$router.push('/company');
+                        }
+                    } catch (error) { 
+                        console.log(error);
+                        alert("Invalid username or password"); 
+                    }
+                }
+            }
+        };
+
+        const RegisterPage = {
+            template: `
+                <div class="row justify-content-center">
+                    <div class="col-md-5">
+                        <div class="card shadow mt-4">
+                            <div class="card-body">
+                                <h3 class="card-title text-center mb-4">Register New Account</h3>
+                                <div class="mb-3">
+                                    <label>I am a...</label>
+                                    <select v-model="selectedRole" class="form-select">
+                                        <option value="student">Student</option>
+                                        <option value="company">Company</option>
+                                    </select>
+                                </div>
+                                <form @submit.prevent="submitRegistration">
+                                    <input v-model="regData.username" type="text" class="form-control mb-3" placeholder="Choose a Username" required>
+                                    <input v-model="regData.email" type="email" class="form-control mb-3" placeholder="Your Email Address" required>
+                                    <input v-model="regData.password" type="password" class="form-control mb-3" placeholder="Choose a Password" required>
+                                    
+                                    <div v-if="selectedRole === 'company'" class="border p-3 mb-3 bg-light rounded">
+                                        <h6 class="mb-3">Company Details</h6>
+                                        <input v-model="regData.company_name" type="text" class="form-control mb-2" placeholder="Organization Name" required>
+                                        <input v-model="regData.hr_contact" type="text" class="form-control" placeholder="HR Person Name" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-success w-100">Register</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>`,
+            data() { 
+                return { 
+                    selectedRole: 'student', 
+                    regData: { username: '', email: '', password: '', company_name: '', hr_contact: '' } 
+                } 
+            },
+            methods: {
+                async submitRegistration() {
+                    let apiURL = '/api/auth/register/student';
+                    if (this.selectedRole === 'company') {
+                        apiURL = '/api/auth/register/company';
+                    }
+                    
+                    try {
+                        const response = await axios.post(apiURL, this.regData);
+                        alert(response.data.msg);
+                        this.$router.push('/'); // send them back to login
+                    } catch (error) { 
+                        alert(error.response.data.msg); 
+                    }
+                }
+            }
+        };
+
+        const AdminView = {
+            template: `<div>
+                <h2 class="mb-4">Admin Dashboard</h2>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card shadow mb-4">
+                            <div class="card-header bg-dark text-white">Registered Companies</div>
+                            <div class="card-body p-0">
+                                <ul class="list-group list-group-flush">
+                                    <li v-for="c in approvedCompaniesList" :key="c.id" class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span :class="{'text-decoration-line-through text-muted': !c.is_active}">{{ c.name }}</span>
+                                        <button @click="blockUser(c.id)" :class="c.is_active ? 'btn btn-sm btn-danger' : 'btn btn-sm btn-secondary'">
+                                            {{ c.is_active ? 'blacklist' : 'restore' }}
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="card shadow mb-4">
+                            <div class="card-header bg-dark text-white">Registered Students</div>
+                            <div class="card-body p-0">
+                                <ul class="list-group list-group-flush">
+                                    <li v-for="s in studentList" :key="s.id" class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span :class="{'text-decoration-line-through text-muted': !s.is_active}">{{ s.username }}</span>
+                                        <button @click="blockUser(s.id)" :class="s.is_active ? 'btn btn-sm btn-danger' : 'btn btn-sm btn-secondary'">
+                                            {{ s.is_active ? 'blacklist' : 'restore' }}
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="card shadow mb-4 border-warning">
+                            <div class="card-header bg-warning text-dark fw-bold">Pending Approvals</div>
+                            <div class="card-body">
+                                <h6 class="text-muted">Companies Waiting</h6>
+                                <ul class="list-group mb-3">
+                                    <li v-for="c in waitingCompanies" :key="c.id" class="list-group-item d-flex justify-content-between p-2">
+                                        {{ c.name }} <button @click="acceptCompany(c.id)" class="btn btn-sm btn-success">Approve</button>
+                                    </li>
+                                </ul>
+                                <h6 class="text-muted">Drives Waiting</h6>
+                                <ul class="list-group">
+                                    <li v-for="d in waitingDrives" :key="d.id" class="list-group-item d-flex justify-content-between p-2">
+                                        {{ d.title }} <button @click="acceptDrive(d.id)" class="btn btn-sm btn-success">Approve</button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card shadow mb-4">
+                            <div class="card-header bg-dark text-white">Ongoing Drives</div>
+                            <div class="card-body p-0">
+                                <table class="table mb-0 table-hover">
+                                    <thead><tr><th>Drive Name</th><th>Company</th><th>Actions</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="d in allDrivesList" :key="d.id">
+                                            <td>{{ d.title }}</td><td>{{ d.company }}</td>
+                                            <td>
+                                                <button @click="showDriveData(d)" class="btn btn-sm btn-outline-info">view details</button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                
+                                <div v-if="clickedDrive" class="p-3 bg-light border-top">
+                                    <h5>Details: {{ clickedDrive.title }}</h5>
+                                    <p>Description: {{ clickedDrive.description }}</p>
+                                    <p>Status: {{ clickedDrive.status }}</p>
+                                    <button @click="clickedDrive = null" class="btn btn-sm btn-dark">Close</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card shadow mb-4">
+                            <div class="card-header bg-dark text-white">Student Applications</div>
+                            <div class="card-body p-0">
+                                <table class="table mb-0">
+                                    <thead><tr><th>Sr No.</th><th>Name</th><th>Drive</th><th>Company</th><th>Action</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="(a, index) in allAppsList" :key="a.id">
+                                            <td>{{ index + 1 }}</td>
+                                            <td>{{ a.student_name }}</td>
+                                            <td>{{ a.drive_title }}</td>
+                                            <td>{{ a.company }}</td>
+                                            <td><button class="btn btn-sm btn-outline-secondary">view</button></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`,
+            data() { 
+                return { 
+                    waitingCompanies: [], waitingDrives: [],
+                    studentList: [], approvedCompaniesList: [], 
+                    allDrivesList: [], allAppsList: [],
+                    clickedDrive: null
+                } 
+            },
+            methods: {
+                getTokenHeader() { return { headers: { Authorization: 'Bearer ' + localStorage.getItem('userToken') } }; },
+                async loadAdminData() {
+                    const h = this.getTokenHeader();
+                    // fetch everything
+                    this.waitingCompanies = (await axios.get('/api/admin/pending-companies', h)).data;
+                    this.waitingDrives = (await axios.get('/api/admin/pending-drives', h)).data;
+                    this.studentList = (await axios.get('/api/admin/students', h)).data;
+                    this.approvedCompaniesList = (await axios.get('/api/admin/companies', h)).data;
+                    this.allDrivesList = (await axios.get('/api/admin/all-drives', h)).data;
+                    this.allAppsList = (await axios.get('/api/admin/all-applications', h)).data;
+                },
+                async acceptCompany(id) { 
+                    await axios.post('/api/admin/approve-company/'+id, {}, this.getTokenHeader()); 
+                    this.loadAdminData(); 
+                },
+                async acceptDrive(id) { 
+                    await axios.post('/api/admin/approve-drive/'+id, {}, this.getTokenHeader()); 
+                    this.loadAdminData(); 
+                },
+                async blockUser(id) { 
+                    await axios.post('/api/admin/blacklist/'+id, {}, this.getTokenHeader()); 
+                    this.loadAdminData(); 
+                },
+                showDriveData(driveData) {
+                    this.clickedDrive = driveData;
+                }
+            }, 
+            mounted() { this.loadAdminData(); }
+        };
+
+        const CompanyView = {
+            template: `<div>
+                <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
+                    <h2>Welcome {{ myCompanyName }}</h2>
+                </div>
+
+                <div v-if="activeScreen === 'homeDashboard'">
+                    <div class="card shadow mb-4">
+                        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                            Upcoming Drives
+                            <button @click="activeScreen = 'newDriveForm'" class="btn btn-sm btn-light text-dark fw-bold">Create Drive</button>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0">
+                                <thead><tr><th>Sr No.</th><th>Drive Name</th><th>Actions</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="(d, i) in getOpenDrives" :key="d.id">
+                                        <td>{{ i + 1 }}</td>
+                                        <td>
+                                            {{ d.title }} 
+                                            <span v-if="d.status==='Pending'" class="badge bg-warning text-dark ms-2">Pending</span>
+                                        </td>
+                                        <td>
+                                            <button v-if="d.status==='Approved'" @click="openDriveDetails(d)" class="btn btn-sm btn-outline-primary me-2">view details</button>
+                                            <button v-if="d.status==='Approved'" @click="markCompleted(d.id)" class="btn btn-sm btn-outline-success">mark as complete</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card shadow mb-4">
+                        <div class="card-header bg-secondary text-white">Closed Drives</div>
+                        <div class="card-body p-0">
+                            <table class="table mb-0">
+                                <thead><tr><th>Sr No.</th><th>Drive Name</th><th>Actions</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="(d, i) in getClosedDrives" :key="d.id">
+                                        <td>{{ i + 1 }}</td>
+                                        <td>{{ d.title }}</td>
+                                        <td><button @click="openDriveDetails(d)" class="btn btn-sm btn-outline-info">update</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="activeScreen === 'newDriveForm'" class="row justify-content-center">
+                    <div class="col-md-7">
+                        <div class="card shadow">
+                            <div class="card-header bg-primary text-white">Create a Drive</div>
+                            <div class="card-body">
+                                <form @submit.prevent="submitNewDrive">
+                                    <input v-model="newDriveData.job_title" class="form-control mb-3" placeholder="Job Title" required>
+                                    <textarea v-model="newDriveData.job_description" class="form-control mb-3" placeholder="Job Description" required></textarea>
+                                    <input v-model="newDriveData.eligibility_criteria" class="form-control mb-3" placeholder="Eligibility Criteria" required>
+                                    <input v-model="newDriveData.location" class="form-control mb-3" placeholder="Location" required>
+                                    <input v-model="newDriveData.salary" type="number" class="form-control mb-3" placeholder="Salary" required>
+                                    <label class="form-label small">Application Deadline</label>
+                                    <input v-model="newDriveData.deadline" type="date" class="form-control mb-4" required>
+                                    <div class="d-flex justify-content-between">
+                                        <button type="button" @click="activeScreen = 'homeDashboard'" class="btn btn-secondary px-4">Cancel</button>
+                                        <button type="submit" class="btn btn-success px-4">Save</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="activeScreen === 'appReviewList'" class="card shadow">
+                    <div class="card-header bg-dark text-white">Update Applications for the Drive</div>
+                    <div class="card-body">
+                        <h5>Job Title: {{ clickedDrive.title }}</h5>
+                        <hr>
+                        <h6>Received Applications</h6>
+                        <ul class="list-group mb-4">
+                            <li v-for="app in driveAppsList" :key="app.app_id" class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>{{ app.student_name }} - <span class="text-muted">{{ app.status }}</span></div>
+                                <button @click="reviewSingleApp(app)" class="btn btn-sm btn-outline-primary">review application</button>
+                            </li>
+                        </ul>
+                        <button @click="activeScreen = 'homeDashboard'" class="btn btn-secondary">Back</button>
+                    </div>
+                </div>
+
+                <div v-if="activeScreen === 'singleAppReview'" class="row justify-content-center">
+                    <div class="col-md-6">
+                        <div class="card shadow border-dark">
+                            <div class="card-body p-4">
+                                <h3 class="mb-4 text-center">Student Application</h3>
+                                <p><strong>Name:</strong> {{ clickedApp.student_name }}</p>
+                                <p><strong>Drive:</strong> {{ clickedDrive.title }}</p>
+                                <p><strong>Status:</strong> {{ clickedApp.status }}</p>
+                                
+                                <div class="mt-4 border-top pt-3">
+                                    <label>Update Status:</label>
+                                    <select v-model="tempStatus" class="form-select mb-3">
+                                        <option value="Applied">Waiting</option>
+                                        <option value="Shortlisted">Shortlist</option>
+                                        <option value="Selected">Select</option>
+                                        <option value="Rejected">Reject</option>
+                                    </select>
+                                    <button @click="saveNewStatus" class="btn btn-success w-100 mb-2">Save Status</button>
+                                    <button @click="activeScreen = 'appReviewList'" class="btn btn-outline-dark w-100">Back</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`,
+            data() { 
+                return { 
+                    myCompanyName: 'Company',
+                    activeScreen: 'homeDashboard', 
+                    newDriveData: {job_title:'', job_description:'', eligibility_criteria:'', location:'', salary:'', deadline:''}, 
+                    myDrivesList: [], 
+                    driveAppsList: [], 
+                    clickedDrive: null,
+                    clickedApp: null,
+                    tempStatus: ''
+                } 
+            },
+            computed: {
+                getOpenDrives() { return this.myDrivesList.filter(d => d.status !== 'Closed'); },
+                getClosedDrives() { return this.myDrivesList.filter(d => d.status === 'Closed'); }
+            },
+            methods: {
+                getToken() { return { headers: { Authorization: 'Bearer ' + localStorage.getItem('userToken') } }; },
+                
+                async loadCompanyData() { 
+                    try {
+                        const info = await axios.get('/api/company/me', this.getToken());
+                        this.myCompanyName = info.data.company_name;
+                        
+                        const drives = await axios.get('/api/company/drives', this.getToken());
+                        this.myDrivesList = drives.data;
+                    } catch(err) { console.log(err); }
+                },
+                async submitNewDrive() { 
+                    try {
+                        await axios.post('/api/company/drives', this.newDriveData, this.getToken()); 
+                        this.newDriveData = {job_title:'', job_description:'', eligibility_criteria:'', location:'', salary:'', deadline:''}; // reset
+                        this.activeScreen = 'homeDashboard';
+                        this.loadCompanyData(); 
+                    } catch(err) { alert("Failed"); }
+                },
+                async markCompleted(id) {
+                    await axios.put('/api/company/drives/'+id+'/close', {}, this.getToken());
+                    this.loadCompanyData();
+                },
+                async openDriveDetails(drive) { 
+                    this.clickedDrive = drive; 
+                    const res = await axios.get('/api/company/drives/'+drive.id+'/applications', this.getToken());
+                    this.driveAppsList = res.data; 
+                    this.activeScreen = 'appReviewList';
+                },
+                reviewSingleApp(app) {
+                    this.clickedApp = app;
+                    this.tempStatus = app.status; 
+                    this.activeScreen = 'singleAppReview';
+                },
+                async saveNewStatus() { 
+                    await axios.put('/api/company/applications/'+this.clickedApp.app_id+'/status', {status: this.tempStatus}, this.getToken()); 
+                    alert("Saved!");
+                    // fetch updated apps to show immediately
+                    const res = await axios.get('/api/company/drives/'+this.clickedDrive.id+'/applications', this.getToken());
+                    this.driveAppsList = res.data; 
+                    this.activeScreen = 'appReviewList'; 
+                }
+            }, mounted() { this.loadCompanyData(); }
+        };
+
+        const StudentView = {
+            template: `<div>
+                <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
+                    <h2>Welcome Student</h2>
+                    <div>
+                        <button @click="viewMode = 'main'" :class="viewMode === 'main' ? 'btn btn-primary' : 'btn btn-outline-primary'">Dashboard</button>
+                        <button @click="viewMode = 'history'" :class="viewMode === 'history' ? 'btn btn-info ms-2' : 'btn btn-outline-info ms-2'">History</button>
+                        <button @click="doExport" class="btn btn-secondary ms-2">Export CSV</button>
+                    </div>
+                </div>
+                
+                <div v-if="viewMode === 'main'" class="row">
+                    <div class="col-md-5">
+                        <div class="card shadow mb-4">
+                            <div class="card-header bg-dark text-white">Organizations</div>
+                            <div class="card-body p-0">
+                                <ul class="list-group list-group-flush">
+                                    <li v-for="c in orgList" :key="c.id" class="list-group-item d-flex justify-content-between align-items-center">
+                                        {{ c.name }}
+                                        <button @click="pickCompany(c)" class="btn btn-sm btn-outline-primary">View Details</button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-7">
+                        <div v-if="activeCompany" class="card shadow mb-4">
+                            <div class="card-header bg-success text-white">Current Drives for {{ activeCompany.name }}</div>
+                            <div class="card-body p-0">
+                                <ul class="list-group list-group-flush">
+                                    <li v-for="d in filteredDrives" :key="d.id" class="list-group-item d-flex justify-content-between align-items-center">
+                                        {{ d.title }}
+                                        <button @click="seeDriveInfo(d)" class="btn btn-sm btn-info">View Details</button>
+                                    </li>
+                                </ul>
+                                <div v-if="filteredDrives.length === 0" class="p-3 text-muted">No drives found.</div>
+                            </div>
+                        </div>
+                        <div v-else class="alert alert-secondary">Select an Organization to see their jobs.</div>
+                    </div>
+                </div>
+
+                <div v-if="viewMode === 'driveInfo'" class="row justify-content-center">
+                    <div class="col-md-8">
+                        <div class="card shadow">
+                            <div class="card-body">
+                                <h3>{{ activeDrive.title }}</h3>
+                                <h5 class="text-muted mb-4">{{ activeDrive.company }}</h5>
+                                
+                                <p><strong>Description:</strong> {{ activeDrive.description }}</p>
+                                <p><strong>Eligibility:</strong> {{ activeDrive.eligibility }}</p>
+                                <p><strong>Salary:</strong> {{ activeDrive.salary }}</p>
+                                <p><strong>Location:</strong> {{ activeDrive.location }}</p>
+                                <p class="text-danger small">Deadline: {{ activeDrive.deadline }}</p>
+                                
+                                <div class="mt-4 pt-3 border-top">
+                                    <button @click="sendApplication(activeDrive.id)" class="btn btn-primary px-4">Apply</button>
+                                    <button @click="viewMode = 'main'" class="btn btn-outline-dark ms-3">Go Back</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="viewMode === 'history'">
+                    <div class="card shadow mb-4">
+                        <div class="card-header bg-dark text-white">Student Application History</div>
+                        <div class="card-body p-0">
+                            <table class="table table-striped mb-0">
+                                <thead>
+                                    <tr><th>Drive No.</th><th>Company</th><th>Job Title</th><th>Date</th><th>Results</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="a in historyApps" :key="a.id">
+                                        <td>{{ a.id }}</td>
+                                        <td>{{ a.company }}</td>
+                                        <td>{{ a.drive_title }}</td>
+                                        <td>{{ a.date }}</td>
+                                        <td><strong>{{ a.status }}</strong></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>`,
+            data() { 
+                return { 
+                    viewMode: 'main', 
+                    orgList: [], 
+                    fullDriveList: [], 
+                    historyApps: [],
+                    activeCompany: null,
+                    activeDrive: null
+                } 
+            },
+            computed: {
+                filteredDrives() {
+                    if (this.activeCompany == null) return [];
+                    // only return drives that belong to the clicked company
+                    return this.fullDriveList.filter(d => d.company_id === this.activeCompany.id);
+                }
+            },
+            methods: {
+                getToken() { return { headers: { Authorization: 'Bearer ' + localStorage.getItem('userToken') } }; },
+                async getStudentData() {
+                    const h = this.getToken();
+                    this.orgList = (await axios.get('/api/student/companies', h)).data;
+                    this.fullDriveList = (await axios.get('/api/student/drives', h)).data;
+                    this.historyApps = (await axios.get('/api/student/applications', h)).data;
+                },
+                pickCompany(c) {
+                    this.activeCompany = c;
+                },
+                seeDriveInfo(d) {
+                    this.activeDrive = d;
+                    this.viewMode = 'driveInfo';
+                },
+                async sendApplication(id) { 
+                    try {
+                        await axios.post('/api/student/apply/'+id, {}, this.getToken()); 
+                        alert("Applied!");
+                        this.getStudentData(); 
+                        this.viewMode = 'history'; // Send them to history screen
+                    } catch(err) {
+                        alert(err.response.data.msg);
+                    }
+                },
+                async doExport() { 
+                    const res = await axios.post('/api/student/export-csv', {}, this.getToken());
+                    alert(res.data.msg); 
+                }
+            }, mounted() { this.getStudentData(); }
+        };
+
+        // ---- ROUTING SETUP ----
+
+        const myRouter = createRouter({
+            history: createWebHashHistory(),
+            routes: [
+                { path: '/', component: LoginPage }, 
+                { path: '/register', component: RegisterPage },
+                { path: '/admin', component: AdminView }, 
+                { path: '/student', component: StudentView }, 
+                { path: '/company', component: CompanyView },
+            ]
+        });
+
+        // Simple auth check before changing pages
+        myRouter.beforeEach((to, from, next) => {
+            const hasToken = localStorage.getItem('userToken');
+            const myRole = localStorage.getItem('userRole');
+            
+            if (to.path !== '/' && to.path !== '/register' && !hasToken) {
+                next('/');
+            } else if (to.path === '/admin' && myRole !== 'admin') {
+                next('/');
+            } else if (to.path === '/student' && myRole !== 'student') {
+                next('/');
+            } else if (to.path === '/company' && myRole !== 'company') {
+                next('/');
+            } else {
+                next();
+            }
+        });
+
+        // ---- MOUNT VUE ----
+
+        const myApp = createApp({
+            data() { 
+                return { userIsLoggedIn: false } 
+            },
+            methods: { 
+                handleLogout() { 
+                    localStorage.removeItem('userToken');
+                    localStorage.removeItem('userRole'); 
+                    this.userIsLoggedIn = false; 
+                    this.$router.push('/'); 
+                } 
+            },
+            watch: { 
+                // Watch the route to update login status
+                $route() { 
+                    if(localStorage.getItem('userToken') != null) {
+                        this.userIsLoggedIn = true;
+                    } else {
+                        this.userIsLoggedIn = false;
+                    }
+                } 
+            },
+            mounted() {
+                if(localStorage.getItem('userToken') != null) {
+                    this.userIsLoggedIn = true;
+                }
+            }
+        });
+
+        myApp.use(myRouter); 
+        myApp.mount('#app');
+    </script>
+    {% endraw %}
+</body>
+</html>
