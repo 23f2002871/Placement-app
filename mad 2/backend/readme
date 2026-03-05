@@ -1,0 +1,12 @@
+cd backend
+python app.py
+
+
+
+cd backend
+celery -A tasks.celery worker --pool=solo --loglevel=info
+
+
+
+cd backend
+celery -A tasks.celery beat --loglevel=info

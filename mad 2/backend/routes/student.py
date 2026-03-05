@@ -1,9 +1,15 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from models import db, PlacementDrive, Application, CompanyProfile
+
+# Import database models
+from models import db, PlacementDrive, Application, CompanyProfile, User
+
+# Import cache
+from extensions import cache
 
 student_bp = Blueprint('student', __name__)
 
+# Helper function to make sure only students can access these routes
 def check_student_role():
     claims = get_jwt()
     if claims.get('role') != 'student': 
@@ -24,6 +30,7 @@ def list_companies_for_student():
 
 @student_bp.route('/drives', methods=['GET'])
 @jwt_required()
+@cache.cached(timeout=60, key_prefix='student_drives') # Cache this API response for 60 seconds
 def list_approved_drives():
     if not check_student_role(): 
         return jsonify({"msg": "Unauthorized"}), 403
@@ -84,6 +91,17 @@ def view_my_history():
 
 @student_bp.route('/export-csv', methods=['POST'])
 @jwt_required()
-def dummy_csv_export():
-    # We will connect Celery here later
-    return jsonify({"msg": "Celery export triggered (Placeholder)"}), 200
+def trigger_real_csv_export():
+    if not check_student_role(): 
+        return jsonify({"msg": "Unauthorized"}), 403
+        
+    my_user_id = get_jwt_identity()
+    student_record = User.query.get(my_user_id)
+    
+    # .....
+    from tasks import generate_csv_for_student
+    
+    # celery (.delay runs it async)
+    generate_csv_for_student.delay(my_user_id, student_record.email)
+    
+    return jsonify({"msg": "Export started! You will receive an alert when the CSV is ready."}), 202

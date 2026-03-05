@@ -2,11 +2,7 @@ from flask import Flask, render_template
 from flask_jwt_extended import JWTManager
 from models import db, User
 from config import Config
-
-from routes.auth import auth_bp
-from routes.admin import admin_bp
-from routes.company import company_bp
-from routes.student import student_bp
+from extensions import cache  
 
 def build_app():
     # configure static and template folders for vue
@@ -15,6 +11,7 @@ def build_app():
     
     db.init_app(app)
     JWTManager(app)
+    cache.init_app(app) 
 
     # create tables and initial admin
     with app.app_context():
@@ -26,6 +23,12 @@ def build_app():
             db.session.add(admin_user)
             db.session.commit()
             print("Created default admin account.")
+
+    # more circular imports!
+    from routes.auth import auth_bp
+    from routes.admin import admin_bp
+    from routes.company import company_bp
+    from routes.student import student_bp
 
     # connect the route files
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -43,3 +46,4 @@ def build_app():
 if __name__ == '__main__':
     my_app = build_app()
     my_app.run(debug=True)
+
