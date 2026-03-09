@@ -6,28 +6,31 @@ from celery_setup import celery
 from models import db, Application, PlacementDrive, User
 from app import build_app
 
-# We need the Flask app context so our background jobs can talk to the database
+#  Import Mail  
+from flask_mail import Message
+from extensions import mail
+
+#  Flask app 
 flask_app = build_app()
 
-# ---- 1. SCHEDULED JOBS CONFIGURATION ----
+#  SCHEDULED JOBS 
 celery.conf.beat_schedule = {
     'send-daily-reminders': {
         'task': 'tasks.daily_reminder_job',
-        'schedule': crontab(hour=9, minute=0), # Every day at 9:00 AM
+        'schedule': crontab(hour=9, minute=0), 
     },
     'send-monthly-report': {
         'task': 'tasks.monthly_admin_report_job',
-        'schedule': crontab(day_of_month='1', hour=8, minute=0), # 1st of every month at 8 AM
+        'schedule': crontab(day_of_month='1', hour=8, minute=0), 
     }
 }
 
-# ---- 2. ASYNC JOB: EXPORT CSV ----
+#  EXPORT CSV 
 @celery.task
 def generate_csv_for_student(student_id, email):
     with flask_app.app_context():
         my_apps = Application.query.filter_by(student_id=student_id).all()
         
-        # Making a folder called 'exports' if it doesn't exist
         if not os.path.exists('exports'):
             os.makedirs('exports')
             
@@ -45,16 +48,17 @@ def generate_csv_for_student(student_id, email):
                     a.status
                 ])
                 
-        print(f"--> [ASYNC JOB] CSV generated! Mock Alert Sent to: {email}")
+        #  Actually send the email to MailHog
+        msg = Message("Your Application History Export", recipients=[email])
+        msg.body = "Hello! Your requested CSV export of your application history is complete. Please find the file on the server."
+        mail.send(msg)
+        
         return file_path
 
-# ---- 3. SCHEDULED JOB: DAILY REMINDERS ----
+#  DAILY REMINDERS 
 @celery.task
 def daily_reminder_job():
     with flask_app.app_context():
-        print("--> [CRON JOB] Checking for upcoming deadlines...")
-        
-        # Finding drives closing tomorrow
         tomorrow = datetime.now() + timedelta(days=1)
         closing_soon = PlacementDrive.query.filter(
             PlacementDrive.status == 'Approved',
@@ -62,26 +66,25 @@ def daily_reminder_job():
         ).all()
         
         if len(closing_soon) == 0:
-            print("No deadlines tomorrow.")
-            return "Done"
+            return "No deadlines tomorrow."
             
         students = User.query.filter_by(role='student').all()
         
         for drive in closing_soon:
             for s in students:
-                # Checking if they already applied
                 applied = Application.query.filter_by(student_id=s.id, drive_id=drive.id).first()
                 if applied is None:
-                    print(f"--> [G-CHAT MOCK] Reminder to {s.email}: {drive.job_title} at {drive.company_ref.company_name} closes tomorrow!")
+                    #  Send reminder email to MailHog 
+                    msg = Message(f"URGENT: {drive.company_ref.company_name} Deadline Tomorrow!", recipients=[s.email])
+                    msg.body = f"Hello {s.username},\n\nDon't forget! The application deadline for '{drive.job_title}' at {drive.company_ref.company_name} closes tomorrow. Log in to apply now."
+                    mail.send(msg)
                     
         return "Reminders sent"
 
-# ---- 4. SCHEDULED JOB: MONTHLY REPORT ----
+#  MONTHLY REPORT 
 @celery.task
 def monthly_admin_report_job():
     with flask_app.app_context():
-        print("--> [CRON JOB] Generating Monthly Admin Report...")
-        
         total_drives = PlacementDrive.query.count()
         total_apps = Application.query.count()
         selected_students = Application.query.filter_by(status='Selected').count()
@@ -100,5 +103,10 @@ def monthly_admin_report_job():
         </html>
         """
         
-        print(f"--> [EMAIL MOCK] Sending HTML Report to Admin...\n{html_content}")
+        #  Send HTML email to MailHog 
+        admin_user = User.query.filter_by(role='admin').first()
+        msg = Message("Monthly Placement Report", recipients=[admin_user.email])
+        msg.html = html_content  
+        mail.send(msg)
+        
         return "Report generated"

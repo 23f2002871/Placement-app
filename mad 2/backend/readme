@@ -1,3 +1,6 @@
+pip install -r requirements.txt
+
+
 cd backend
 python app.py
 
@@ -10,3 +13,5 @@ celery -A tasks.celery worker --pool=solo --loglevel=info
 
 cd backend
 celery -A tasks.celery beat --loglevel=info
+
+

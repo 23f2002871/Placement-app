@@ -4,7 +4,6 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
-# Master user table for all roles (Admin, Company, Student)
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -20,16 +19,14 @@ class User(db.Model):
     def verify_password(self, plain_password):
         return check_password_hash(self.password_hash, plain_password)
 
-# Table to store extra details for companies
 class CompanyProfile(db.Model):
     __tablename__ = 'company_profiles'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     company_name = db.Column(db.String(150), nullable=False)
     hr_contact = db.Column(db.String(150))
-    is_approved = db.Column(db.Boolean, default=False)
+    is_approved = db.Column(db.Boolean, default=False) 
     
-    # linking back to the user table
     user_account = db.relationship('User', backref=db.backref('company_profile', uselist=False))
 
 class PlacementDrive(db.Model):
@@ -42,9 +39,8 @@ class PlacementDrive(db.Model):
     location = db.Column(db.String(100))
     salary = db.Column(db.String(50))
     application_deadline = db.Column(db.DateTime, nullable=False)
-    status = db.Column(db.String(20), default='Pending') # Can be Pending, Approved, Closed
+    status = db.Column(db.String(20), default='Pending') 
     
-    # linking back to the company profile
     company_ref = db.relationship('CompanyProfile', backref='drives')
 
 class Application(db.Model):
@@ -55,6 +51,5 @@ class Application(db.Model):
     application_date = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(20), default='Applied')
     
-    # relations
     student_ref = db.relationship('User', backref='my_applications')
     drive_ref = db.relationship('PlacementDrive', backref='received_applications')

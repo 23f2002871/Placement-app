@@ -14,5 +14,12 @@ class Config:
     
     # Caching Configuration
     CACHE_TYPE = 'RedisCache'
-    CACHE_REDIS_URL = 'redis://localhost:6379/1' # Using database 1 for cache
-    CACHE_DEFAULT_TIMEOUT = 300 # 5 minutes
+    CACHE_REDIS_URL = 'redis://localhost:6379/1' 
+    CACHE_DEFAULT_TIMEOUT = 300 
+
+    #  Flask-Mail & MailHog Configuration
+    MAIL_SERVER = 'localhost'
+    MAIL_PORT = 1025
+    MAIL_USE_TLS = False
+    MAIL_USE_SSL = False
+    MAIL_DEFAULT_SENDER = 'admin@placementportal.edu'

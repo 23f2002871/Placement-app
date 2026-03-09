@@ -98,10 +98,9 @@ def trigger_real_csv_export():
     my_user_id = get_jwt_identity()
     student_record = User.query.get(my_user_id)
     
-    # .....
+
     from tasks import generate_csv_for_student
-    
+   
     # celery (.delay runs it async)
     generate_csv_for_student.delay(my_user_id, student_record.email)
-    
     return jsonify({"msg": "Export started! You will receive an alert when the CSV is ready."}), 202
