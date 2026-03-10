@@ -19,6 +19,18 @@ class User(db.Model):
     def verify_password(self, plain_password):
         return check_password_hash(self.password_hash, plain_password)
 
+class StudentProfile(db.Model):
+    __tablename__ = 'student_profiles'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    full_name = db.Column(db.String(150))
+    department = db.Column(db.String(100))
+    cgpa = db.Column(db.Float)
+    resume_path = db.Column(db.String(255)) 
+
+    user_ref = db.relationship('User', backref='student_profile') 
+    
 class CompanyProfile(db.Model):
     __tablename__ = 'company_profiles'
     id = db.Column(db.Integer, primary_key=True)

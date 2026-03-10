@@ -31,7 +31,7 @@
         const { createApp } = Vue;
         const { createRouter, createWebHashHistory } = VueRouter;
 
-        // ---- COMPONENTS ----
+        //  COMPONENTS 
 
         const LoginPage = { 
             template: `
@@ -70,7 +70,6 @@
                         localStorage.setItem('userRole', response.data.role);
                         this.$root.userIsLoggedIn = true;
                         
-                        // redirect based on what kind of user logged in
                         if (response.data.role === 'admin') {
                             this.$router.push('/admin');
                         } else if (response.data.role === 'student') {
@@ -132,7 +131,7 @@
                     try {
                         const response = await axios.post(apiURL, this.regData);
                         alert(response.data.msg);
-                        this.$router.push('/'); // send them back to login
+                        this.$router.push('/'); 
                     } catch (error) { 
                         alert(error.response.data.msg); 
                     }
@@ -142,7 +141,10 @@
 
         const AdminView = {
             template: `<div>
-                <h2 class="mb-4">Admin Dashboard</h2>
+                <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
+                    <h2 class="mb-0">Admin Dashboard</h2>
+                    <input v-model="adminSearchQuery" type="text" class="form-control w-25" placeholder="Search students or companies...">
+                </div>
                 
                 <div class="row">
                     <div class="col-md-6">
@@ -150,13 +152,14 @@
                             <div class="card-header bg-dark text-white">Registered Companies</div>
                             <div class="card-body p-0">
                                 <ul class="list-group list-group-flush">
-                                    <li v-for="c in approvedCompaniesList" :key="c.id" class="list-group-item d-flex justify-content-between align-items-center">
+                                    <li v-for="c in filteredCompanies" :key="c.id" class="list-group-item d-flex justify-content-between align-items-center">
                                         <span :class="{'text-decoration-line-through text-muted': !c.is_active}">{{ c.name }}</span>
                                         <button @click="blockUser(c.id)" :class="c.is_active ? 'btn btn-sm btn-danger' : 'btn btn-sm btn-secondary'">
                                             {{ c.is_active ? 'blacklist' : 'restore' }}
                                         </button>
                                     </li>
                                 </ul>
+                                <div v-if="filteredCompanies.length === 0" class="p-3 text-muted text-center">No companies match your search.</div>
                             </div>
                         </div>
 
@@ -164,13 +167,14 @@
                             <div class="card-header bg-dark text-white">Registered Students</div>
                             <div class="card-body p-0">
                                 <ul class="list-group list-group-flush">
-                                    <li v-for="s in studentList" :key="s.id" class="list-group-item d-flex justify-content-between align-items-center">
+                                    <li v-for="s in filteredStudents" :key="s.id" class="list-group-item d-flex justify-content-between align-items-center">
                                         <span :class="{'text-decoration-line-through text-muted': !s.is_active}">{{ s.username }}</span>
                                         <button @click="blockUser(s.id)" :class="s.is_active ? 'btn btn-sm btn-danger' : 'btn btn-sm btn-secondary'">
                                             {{ s.is_active ? 'blacklist' : 'restore' }}
                                         </button>
                                     </li>
                                 </ul>
+                                <div v-if="filteredStudents.length === 0" class="p-3 text-muted text-center">No students match your search.</div>
                             </div>
                         </div>
 
@@ -240,17 +244,27 @@
             </div>`,
             data() { 
                 return { 
+                    adminSearchQuery: '',
                     waitingCompanies: [], waitingDrives: [],
                     studentList: [], approvedCompaniesList: [], 
                     allDrivesList: [], allAppsList: [],
                     clickedDrive: null
                 } 
             },
+            computed: {
+                filteredStudents() {
+                    if (!this.adminSearchQuery) return this.studentList;
+                    return this.studentList.filter(s => s.username.toLowerCase().includes(this.adminSearchQuery.toLowerCase()));
+                },
+                filteredCompanies() {
+                    if (!this.adminSearchQuery) return this.approvedCompaniesList;
+                    return this.approvedCompaniesList.filter(c => c.name.toLowerCase().includes(this.adminSearchQuery.toLowerCase()));
+                }
+            },
             methods: {
                 getTokenHeader() { return { headers: { Authorization: 'Bearer ' + localStorage.getItem('userToken') } }; },
                 async loadAdminData() {
                     const h = this.getTokenHeader();
-                    // fetch everything
                     this.waitingCompanies = (await axios.get('/api/admin/pending-companies', h)).data;
                     this.waitingDrives = (await axios.get('/api/admin/pending-drives', h)).data;
                     this.studentList = (await axios.get('/api/admin/students', h)).data;
@@ -280,7 +294,8 @@
         const CompanyView = {
             template: `<div>
                 <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
-                    <h2>Welcome {{ myCompanyName }}</h2>
+                    <h2 class="mb-0">Welcome {{ myCompanyName }}</h2>
+                    <input v-if="activeScreen === 'homeDashboard'" v-model="companySearchQuery" type="text" class="form-control w-25" placeholder="Search your drives...">
                 </div>
 
                 <div v-if="activeScreen === 'homeDashboard'">
@@ -304,6 +319,7 @@
                                             <button v-if="d.status==='Approved'" @click="markCompleted(d.id)" class="btn btn-sm btn-outline-success">mark as complete</button>
                                         </td>
                                     </tr>
+                                    <tr v-if="getOpenDrives.length === 0"><td colspan="3" class="text-center text-muted py-3">No drives match your search.</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -392,6 +408,7 @@
             </div>`,
             data() { 
                 return { 
+                    companySearchQuery: '',
                     myCompanyName: 'Company',
                     activeScreen: 'homeDashboard', 
                     newDriveData: {job_title:'', job_description:'', eligibility_criteria:'', location:'', salary:'', deadline:''}, 
@@ -403,8 +420,20 @@
                 } 
             },
             computed: {
-                getOpenDrives() { return this.myDrivesList.filter(d => d.status !== 'Closed'); },
-                getClosedDrives() { return this.myDrivesList.filter(d => d.status === 'Closed'); }
+                getOpenDrives() { 
+                    let openDrives = this.myDrivesList.filter(d => d.status !== 'Closed');
+                    if (this.companySearchQuery) {
+                        return openDrives.filter(d => d.title.toLowerCase().includes(this.companySearchQuery.toLowerCase()));
+                    }
+                    return openDrives;
+                },
+                getClosedDrives() { 
+                    let closedDrives = this.myDrivesList.filter(d => d.status === 'Closed'); 
+                    if (this.companySearchQuery) {
+                        return closedDrives.filter(d => d.title.toLowerCase().includes(this.companySearchQuery.toLowerCase()));
+                    }
+                    return closedDrives;
+                }
             },
             methods: {
                 getToken() { return { headers: { Authorization: 'Bearer ' + localStorage.getItem('userToken') } }; },
@@ -444,7 +473,6 @@
                 async saveNewStatus() { 
                     await axios.put('/api/company/applications/'+this.clickedApp.app_id+'/status', {status: this.tempStatus}, this.getToken()); 
                     alert("Saved!");
-                    // fetch updated apps to show immediately
                     const res = await axios.get('/api/company/drives/'+this.clickedDrive.id+'/applications', this.getToken());
                     this.driveAppsList = res.data; 
                     this.activeScreen = 'appReviewList'; 
@@ -455,11 +483,15 @@
         const StudentView = {
             template: `<div>
                 <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
-                    <h2>Welcome Student</h2>
+                    <h2 class="mb-0">Welcome Student</h2>
+                    
+                    <input v-if="viewMode !== 'driveInfo' && viewMode !== 'profile'" v-model="studentSearchQuery" type="text" class="form-control w-25 mx-3" placeholder="Search companies or jobs...">
+                    
                     <div>
                         <button @click="viewMode = 'main'" :class="viewMode === 'main' ? 'btn btn-primary' : 'btn btn-outline-primary'">Dashboard</button>
+                        <button @click="openMyProfile" :class="viewMode === 'profile' ? 'btn btn-secondary ms-2' : 'btn btn-outline-secondary ms-2'">Manage Profile</button>
                         <button @click="viewMode = 'history'" :class="viewMode === 'history' ? 'btn btn-info ms-2' : 'btn btn-outline-info ms-2'">History</button>
-                        <button @click="doExport" class="btn btn-secondary ms-2">Export CSV</button>
+                        <button @click="doExport" class="btn btn-dark ms-2">Export CSV</button>
                     </div>
                 </div>
                 
@@ -469,11 +501,12 @@
                             <div class="card-header bg-dark text-white">Organizations</div>
                             <div class="card-body p-0">
                                 <ul class="list-group list-group-flush">
-                                    <li v-for="c in orgList" :key="c.id" class="list-group-item d-flex justify-content-between align-items-center">
+                                    <li v-for="c in filteredOrgs" :key="c.id" class="list-group-item d-flex justify-content-between align-items-center">
                                         {{ c.name }}
                                         <button @click="pickCompany(c)" class="btn btn-sm btn-outline-primary">View Details</button>
                                     </li>
                                 </ul>
+                                <div v-if="filteredOrgs.length === 0" class="p-3 text-muted text-center">No organizations match your search.</div>
                             </div>
                         </div>
                     </div>
@@ -488,10 +521,44 @@
                                         <button @click="seeDriveInfo(d)" class="btn btn-sm btn-info">View Details</button>
                                     </li>
                                 </ul>
-                                <div v-if="filteredDrives.length === 0" class="p-3 text-muted">No drives found.</div>
+                                <div v-if="filteredDrives.length === 0" class="p-3 text-muted">No drives match your search.</div>
                             </div>
                         </div>
                         <div v-else class="alert alert-secondary">Select an Organization to see their jobs.</div>
+                    </div>
+                </div>
+
+                <div v-if="viewMode === 'profile'" class="row justify-content-center">
+                    <div class="col-md-7">
+                        <div class="card shadow border-0">
+                            <div class="card-header bg-info text-dark fw-bold text-center">Student Academic Profile</div>
+                            <div class="card-body bg-white p-4">
+                                <form @submit.prevent="submitProfileData">
+                                    <div class="mb-3">
+                                        <label class="fw-semibold small text-muted">Student Full Name</label>
+                                        <input v-model="studentInfoDetails.full_name" type="text" class="form-control" placeholder="Enter your full name">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="fw-semibold small text-muted">Academic Department</label>
+                                        <input v-model="studentInfoDetails.department" type="text" class="form-control" placeholder="e.g., Computer Science">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="fw-semibold small text-muted">Current CGPA</label>
+                                        <input v-model="studentInfoDetails.cgpa" type="number" step="0.01" class="form-control" placeholder="e.g., 9.2">
+                                    </div>
+                                    <div class="mb-4">
+                                        <label class="fw-semibold small text-muted">Resume Document (PDF only)</label>
+                                        <input type="file" @change="captureFile" accept=".pdf" class="form-control">
+                                        <div v-if="studentInfoDetails.resume_path" class="text-primary small mt-2">
+                                            <i>Uploaded file: {{ studentInfoDetails.resume_path }}</i>
+                                        </div>
+                                    </div>
+                                    <div class="d-grid gap-2">
+                                        <button type="submit" class="btn btn-success">Update Details</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -526,13 +593,14 @@
                                     <tr><th>Drive No.</th><th>Company</th><th>Job Title</th><th>Date</th><th>Results</th></tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="a in historyApps" :key="a.id">
+                                    <tr v-for="a in filteredHistory" :key="a.id">
                                         <td>{{ a.id }}</td>
                                         <td>{{ a.company }}</td>
                                         <td>{{ a.drive_title }}</td>
                                         <td>{{ a.date }}</td>
                                         <td><strong>{{ a.status }}</strong></td>
                                     </tr>
+                                    <tr v-if="filteredHistory.length === 0"><td colspan="5" class="text-center py-3 text-muted">No history matches your search.</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -541,19 +609,37 @@
             </div>`,
             data() { 
                 return { 
+                    studentSearchQuery: '',
                     viewMode: 'main', 
                     orgList: [], 
                     fullDriveList: [], 
                     historyApps: [],
                     activeCompany: null,
-                    activeDrive: null
+                    activeDrive: null,
+                    studentInfoDetails: { full_name: '', department: '', cgpa: '', resume_path: '' },
+                    uploadedResumeDoc: null
                 } 
             },
             computed: {
+                filteredOrgs() {
+                    if (!this.studentSearchQuery) return this.orgList;
+                    return this.orgList.filter(o => o.name.toLowerCase().includes(this.studentSearchQuery.toLowerCase()));
+                },
                 filteredDrives() {
                     if (this.activeCompany == null) return [];
-                    // only return drives that belong to the clicked company
-                    return this.fullDriveList.filter(d => d.company_id === this.activeCompany.id);
+                    let companyDrives = this.fullDriveList.filter(d => d.company_id === this.activeCompany.id);
+                    if (this.studentSearchQuery) {
+                        return companyDrives.filter(d => d.title.toLowerCase().includes(this.studentSearchQuery.toLowerCase()));
+                    }
+                    return companyDrives;
+                },
+                filteredHistory() {
+                    if (!this.studentSearchQuery) return this.historyApps;
+                    const query = this.studentSearchQuery.toLowerCase();
+                    return this.historyApps.filter(a => 
+                        a.company.toLowerCase().includes(query) || 
+                        a.drive_title.toLowerCase().includes(query)
+                    );
                 }
             },
             methods: {
@@ -564,6 +650,43 @@
                     this.fullDriveList = (await axios.get('/api/student/drives', h)).data;
                     this.historyApps = (await axios.get('/api/student/applications', h)).data;
                 },
+                
+                //  PROFILE 
+                async openMyProfile() {
+                    this.viewMode = 'profile';
+                    try {
+                        const res = await axios.get('/api/student/profile', this.getToken());
+                        this.studentInfoDetails = res.data;
+                    } catch(e) { console.log(e); }
+                },
+                captureFile(event) {
+                    this.uploadedResumeDoc = event.target.files[0]; 
+                },
+                async submitProfileData() {
+                    let dataForm = new FormData();
+                    dataForm.append('full_name', this.studentInfoDetails.full_name || '');
+                    dataForm.append('department', this.studentInfoDetails.department || '');
+                    dataForm.append('cgpa', this.studentInfoDetails.cgpa || '');
+                    
+                    if (this.uploadedResumeDoc) {
+                        dataForm.append('resume', this.uploadedResumeDoc);
+                    }
+                    
+                    try {
+                        await axios.post('/api/student/profile', dataForm, {
+                            headers: { 
+                                'Authorization': 'Bearer ' + localStorage.getItem('userToken'),
+                                'Content-Type': 'multipart/form-data' 
+                            }
+                        });
+                        alert('Academic Profile has been updated successfully!');
+                        this.openMyProfile(); 
+                    } catch(err) {
+                        alert("Failed to update profile.");
+                    }
+                },
+                // .........
+
                 pickCompany(c) {
                     this.activeCompany = c;
                 },
@@ -576,7 +699,7 @@
                         await axios.post('/api/student/apply/'+id, {}, this.getToken()); 
                         alert("Applied!");
                         this.getStudentData(); 
-                        this.viewMode = 'history'; // Send them to history screen
+                        this.viewMode = 'history'; 
                     } catch(err) {
                         alert(err.response.data.msg);
                     }
@@ -588,7 +711,7 @@
             }, mounted() { this.getStudentData(); }
         };
 
-        // ---- ROUTING SETUP ----
+        //  ROUTING SETUP 
 
         const myRouter = createRouter({
             history: createWebHashHistory(),
@@ -619,7 +742,7 @@
             }
         });
 
-        // ---- MOUNT VUE ----
+        //  MOUNT VUE 
 
         const myApp = createApp({
             data() { 

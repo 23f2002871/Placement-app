@@ -48,7 +48,7 @@ def generate_csv_for_student(student_id, email):
                     a.status
                 ])
                 
-        #  Actually send the email to MailHog
+        #  Actually sending the email to MailHog
         msg = Message("Your Application History Export", recipients=[email])
         msg.body = "Hello! Your requested CSV export of your application history is complete. Please find the file on the server."
         mail.send(msg)
